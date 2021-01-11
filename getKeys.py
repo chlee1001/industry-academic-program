@@ -103,8 +103,8 @@ print(codes)
 
 # mongodb 연결객체 생성
 # client = MongoClient()
-# client = MongoClient('192.168.19*.234*', '1234*')  #접속IP, 포트
-client = MongoClient(지우기)
+# client = MongoClient('192.168.19.2', '27017')  #접속IP, 포트
+client = MongoClient('지우기')
 db = client.KAMIS
 
 # 컬렉션은 테이블같은 개념. sql에서는 table , mongodb는 컬렉션.
