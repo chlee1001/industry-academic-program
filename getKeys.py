@@ -18,6 +18,8 @@ BASE_URL = ROOT_URL + "/customer/price/wholesale/item.do?action=priceinfo"
 
 categoryCodes = dict()  # 부류
 itemCodes = dict()  # 품목
+productRankCodes = {'1': '상품',
+                    '2': '중품'}  # 상품, 중품 , 전체(0)은 뺌
 codes = dict()  # 모든 코드
 
 TregDay = '2021-01-08'
@@ -39,12 +41,13 @@ def getCategoryCode():
                 for list in lists:
                     codeText = list.find('a').get_text()
                     code = re.findall("\d+", (list.find('a').get('onclick')))[0]
-                    codes[code] = codeText
-                    categoryCodes[code] = codeText
+                    codes[codeText] = code
+                    categoryCodes[codeText] = code
 
 
 def getItemCode():
-    for itemCategoryCode in codes.keys():
+    for itemCategoryValue in categoryCodes:
+        itemCategoryCode = categoryCodes[itemCategoryValue]  # key <-> value
         smart_lists = []
         itemCode = dict()  # 품목
 
@@ -62,18 +65,21 @@ def getItemCode():
                     for list in lists:
                         codeText = list.find('a').get_text()
                         code = re.findall("\d+", (list.find('a').get('onclick')))[0]
-                        itemCode[code] = codeText
-                        itemCodes[code] = codeText
+                        itemCode[codeText] = code
+                        itemCodes[codeText] = code
                         # print(codeText, code)
-            codes[itemCategoryCode] = itemCode
+            codes[itemCategoryValue] = itemCode
 
 
 def getKindCode():
-    for itemCategoryCode in codes.keys():
-        for itemCode in codes[itemCategoryCode].keys():
+    for itemCategoryValue in categoryCodes:  # 부류 집합
+        itemCategoryCode = categoryCodes[itemCategoryValue]  # key <-> value
+        for itemValue in codes[itemCategoryValue]:
+            itemCode = codes[itemCategoryValue][itemValue]  # key <-> value
             smart_lists = []
             kindCode = dict()  # 품종
 
+            # print(itemCodes,itemCode)
             URL = BASE_URL + '&regday=' + TregDay + '&itemcategorycode=' + itemCategoryCode + '&itemcode=' + itemCode + '&kindcode=&productrankcode=&convert_kg_yn=N'
             response = requests.get(URL)
             if response.status_code == 200:
@@ -87,24 +93,24 @@ def getKindCode():
                     if idx == 2:
                         for list in lists:
                             codeText = list.find('a').get_text()
-                            code = (list.find('a').get('onclick')).split('(', 1)[1].split(')')[0].split(',')[0].split('\'')[1]
-                            kindCode[code] = codeText
-                            # print(codeText, code)
-                codes[itemCategoryCode][itemCode] = kindCode
+                            code = \
+                                (list.find('a').get('onclick')).split('(', 1)[1].split(')')[0].split(',')[0].split(
+                                    '\'')[1]
+                            kindCode[codeText] = code
+                codes[itemCategoryValue][itemValue] = kindCode
 
 
 getCategoryCode()
-getItemCode()
-getKindCode()
-
 print(categoryCodes)
+getItemCode()
 print(itemCodes)
+getKindCode()
 print(codes)
 
 # mongodb 연결객체 생성
 # client = MongoClient()
 # client = MongoClient('192.168.19.2', '27017')  #접속IP, 포트
-client = MongoClient('지우기')
+client = MongoClient('주소지우기')
 db = client.KAMIS
 
 # 컬렉션은 테이블같은 개념. sql에서는 table , mongodb는 컬렉션.
