@@ -1,10 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
-from datetime import date, timedelta  # 최근 1년 날짜 구하기
+from datetime import date, timedelta, datetime  # 최근 1년 날짜 구하기
 from pymongo import MongoClient, ReturnDocument
 
 # mongodb 연결객체 생성
-client = MongoClient('주소지우기')
+client = MongoClient('주소')
 db = client.KAMIS
 
 codes = dict()  # key모음
@@ -33,12 +33,33 @@ def getKeysfromDB():
 dates = []
 
 
-def getYearDate():
-    for i in range(366):
-        date_value = str(date.today() - timedelta(days=i))
-        dates.append(date_value)
+def getYearDate(flag):
+    if flag == 0:
+        targetDay = date(2020, 1, 1)
+        values = (date.today() - targetDay).days
+        for i in range(values + 1):
+            date_value = str(date.today() - timedelta(days=i))
+            dates.insert(0, date_value)
+        # print(dates)
+    else:  # 크롤링중 에러가 난 날짜부터 다시 시작하기 위함 또는 매일매일 최신화되는데...몇일 건너뛰었을 경우
+        db_datas = db.datas.aggregate([
+            {'$sort': {'date': 1}},
+            {'$group': {'_id': None, 'first': {'$first': '$date'}, 'last': {'$last': '$date'}}}
+        ])
+        for r in db_datas:
+            last = r['last']
+            first = r['first']
+            
+        strpDateTimeLast = datetime.strptime(last, "%Y-%m-%d")
+        strpDateTimeFirst = datetime.strptime(first, "%Y-%m-%d")
 
-    # print(dates)
+        eOb = (strpDateTimeLast - strpDateTimeFirst).days
+        targetDay = date(2020, 1, 1)
+        values = (date.today() - targetDay).days
+        for i in range(values - eOb + 1):
+            date_value = str(date.today() - timedelta(days=i))
+            dates.insert(0, date_value)
+        print(dates)
 
 
 ROOT_URL = "https://www.kamis.or.kr"
@@ -141,23 +162,26 @@ def saveDB(data, regday, values, query):
         print("Complete Insert")
 
 
-getKeysfromDB()
-codes.pop('_id')
-categoryCodes.pop('_id')
-itemCodes.pop('_id')
-getYearDate()
+# getYearDate()
+def main():
+    getKeysfromDB()
+    codes.pop('_id')
+    categoryCodes.pop('_id')
+    itemCodes.pop('_id')
 
-# getData(dates[0])
-count = 0
-for date in dates:
-    if count > 1:
-        break
+    if len(list(db.datas.find())) == 0:  # 데이터가 DB에 없으면
+        getYearDate(0)
+    else:
+        getYearDate(1)
 
-    for itemCategoryValue in categoryCodes:
-        for itemValue in codes[itemCategoryValue].keys():
-            for kindValue in codes[itemCategoryValue][itemValue].keys():
-                if kindValue == '전체':  # 등급이 전체로 분류 된 것은 스킵
-                    continue
-                for productRankCode in productRankCodes.keys():
-                    getData(date, itemCategoryValue, itemValue, kindValue, productRankCode)
-    count += 1
+    for date in dates:
+        for itemCategoryValue in categoryCodes:
+            for itemValue in codes[itemCategoryValue].keys():
+                for kindValue in codes[itemCategoryValue][itemValue].keys():
+                    if kindValue == '전체':  # 등급이 전체로 분류 된 것은 스킵
+                        continue
+                    for productRankCode in productRankCodes.keys():
+                        getData(date, itemCategoryValue, itemValue, kindValue, productRankCode)
+
+
+main()
