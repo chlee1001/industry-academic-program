@@ -1,4 +1,5 @@
 import requests
+import time
 from bs4 import BeautifulSoup
 from datetime import date, timedelta, datetime  # 최근 1년 날짜 구하기
 from pymongo import MongoClient, ReturnDocument
@@ -34,12 +35,17 @@ dates = []
 
 
 def getYearDate(flag):
+    #  요일 반환 (0:월, 1:화, 2:수, 3:목, 4:금, 5:토, 6:일)
+    t = ['월', '화', '수', '목', '금', '토', '일']
+
     if flag == 0:
         targetDay = date(2020, 1, 1)
         values = (date.today() - targetDay).days
         for i in range(values + 1):
-            date_value = str(date.today() - timedelta(days=i))
-            dates.insert(0, date_value)
+            date_value = date.today() - timedelta(days=i)
+            if t[date_value.weekday()] == '토' or t[date_value.weekday()] == '일':  # 주말에는 사이트에 업데이트가 없기 때문에 스킵
+                continue
+            dates.insert(0, str(date_value))
         # print(dates)
     else:  # 크롤링중 에러가 난 날짜부터 다시 시작하기 위함 또는 매일매일 최신화되는데...몇일 건너뛰었을 경우
         db_datas = db.datas.aggregate([
@@ -49,7 +55,7 @@ def getYearDate(flag):
         for r in db_datas:
             last = r['last']
             first = r['first']
-            
+
         strpDateTimeLast = datetime.strptime(last, "%Y-%m-%d")
         strpDateTimeFirst = datetime.strptime(first, "%Y-%m-%d")
 
@@ -57,31 +63,26 @@ def getYearDate(flag):
         targetDay = date(2020, 1, 1)
         values = (date.today() - targetDay).days
         for i in range(values - eOb + 1):
-            date_value = str(date.today() - timedelta(days=i))
-            dates.insert(0, date_value)
+            date_value = date.today() - timedelta(days=i)
+            if t[date_value.weekday()] == '토' or t[date_value.weekday()] == '일':  # 주말에는 사이트에 업데이트가 없기 때문에 스킵
+                continue
+            dates.insert(0, str(date_value))
         print(dates)
 
 
 ROOT_URL = "https://www.kamis.or.kr"
 BASE_URL = ROOT_URL + "/customer/price/wholesale/item.do?action=priceinfo"
 
-# 식량작물
-# ?action=priceinfo&regday=2021-01-08&itemcategorycode=100&itemcode=111&kindcode=&productrankcode=0&convert_kg_yn=N
-
-# 채소류 - 배추 -전체
-# ?action=priceinfo&regday=2021-01-08&itemcategorycode=200&itemcode=211&kindcode=&productrankcode=&convert_kg_yn=N
-# ?action=priceinfo&regday=2021-01-08&itemcategorycode=200&itemcode=211&kindcode=01&productrankcode=&convert_kg_yn=N
-
 # 고려해야할 조건
 # regday=yyyy-mm-dd     : 날짜
 # itemcategorycode=#    : 부류
 # itemcode=#            : 품목
-# kincode=#             : 품종
+# kindcode=#             : 품종
 # productrankcode=#     : 등급
 
 
 # URL = BASE_URL + '&regday=' + regday + '&itemcategorycode=' + str(itemcategorycode) + '&itemcode=' + str(
-#     itemcode) + '&kincode=' + kincode + '&productrankcode=' + str(productrankcode) + '&convert_kg_yn=N'
+#     itemcode) + '&kindcode=' + kindcode + '&productrankcode=' + str(productrankcode) + '&convert_kg_yn=N'
 
 title = []
 
@@ -157,12 +158,12 @@ def saveDB(data, regday, values, query):
             {'date': regday},
             {"$set": {query: values}})
         print("Complete Update")
+        dates.pop(0)  # 업데이트 완료 시 그 해당 날짜 리스트에서 제거
     else:
         datas.insert_one(data)
         print("Complete Insert")
 
 
-# getYearDate()
 def main():
     getKeysfromDB()
     codes.pop('_id')
@@ -174,14 +175,18 @@ def main():
     else:
         getYearDate(1)
 
-    for date in dates:
-        for itemCategoryValue in categoryCodes:
-            for itemValue in codes[itemCategoryValue].keys():
-                for kindValue in codes[itemCategoryValue][itemValue].keys():
-                    if kindValue == '전체':  # 등급이 전체로 분류 된 것은 스킵
-                        continue
-                    for productRankCode in productRankCodes.keys():
-                        getData(date, itemCategoryValue, itemValue, kindValue, productRankCode)
+    try:
+        for date in dates:
+            for itemCategoryValue in categoryCodes:
+                for itemValue in codes[itemCategoryValue].keys():
+                    for kindValue in codes[itemCategoryValue][itemValue].keys():
+                        if kindValue == '전체':  # 등급이 전체로 분류 된 것은 스킵
+                            continue
+                        for productRankCode in productRankCodes.keys():
+                            getData(date, itemCategoryValue, itemValue, kindValue, productRankCode)
+    except TimeoutError as e:  # Timeout 에러 발생 시 스킵하기 위함...테스트중
+        time.sleep(60)
+        pass
 
 
 main()
