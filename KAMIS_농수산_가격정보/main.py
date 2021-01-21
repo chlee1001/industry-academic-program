@@ -1,4 +1,6 @@
-import requests
+from requests import Session
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 import time
 from bs4 import BeautifulSoup
 from datetime import date, timedelta, datetime  # 최근 1년 날짜 구하기
@@ -35,8 +37,9 @@ dates = []
 
 
 def getYearDate(flag):
-    #  요일 반환 (0:월, 1:화, 2:수, 3:목, 4:금, 5:토, 6:일)
-    t = ['월', '화', '수', '목', '금', '토', '일']
+    global last, first
+
+    t = ['월', '화', '수', '목', '금', '토', '일']  # 요일 반환 (0:월, 1:화, 2:수, 3:목, 4:금, 5:토, 6:일)
 
     if flag == 0:
         targetDay = date(2020, 1, 1)
@@ -48,13 +51,14 @@ def getYearDate(flag):
             dates.insert(0, str(date_value))
         # print(dates)
     else:  # 크롤링중 에러가 난 날짜부터 다시 시작하기 위함 또는 매일매일 최신화되는데...몇일 건너뛰었을 경우
-        db_datas = db.datas.aggregate([
+        all_datas = db.allDatas.aggregate([
             {'$sort': {'date': 1}},
             {'$group': {'_id': None, 'first': {'$first': '$date'}, 'last': {'$last': '$date'}}}
         ])
-        for r in db_datas:
+        for r in all_datas:
             last = r['last']
             first = r['first']
+            # print(last, first)
 
         strpDateTimeLast = datetime.strptime(last, "%Y-%m-%d")
         strpDateTimeFirst = datetime.strptime(first, "%Y-%m-%d")
@@ -109,7 +113,27 @@ def getData(regday, itemCategoryValue, itemValue, kindValue, productRankCode):
     kindCode = codes[itemCategoryValue][itemValue][kindValue]
 
     URL = BASE_URL + '&regday=' + regday + '&itemcategorycode=' + itemCategoryCode + '&itemcode=' + itemCode + '&kindcode=' + kindCode + '&productrankcode=' + productRankCode + '&convert_kg_yn=N'
-    response = requests.get(URL)
+    global response
+    retries_number = 5
+    backoff_factor = 0.5
+    status_forcelist = (500, 400)
+
+    retry = Retry(
+        total=retries_number,
+        read=retries_number,
+        connect=retries_number,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+    )
+
+    try:
+        session = Session()
+        session.mount("http://", HTTPAdapter(max_retries=retry))
+        response = session.get(URL, timeout=80)
+    except:
+        print("에러")
+
+    # response = requests.get(URL)
     # print(response.status_code)
     if response.status_code == 200:
         text = response.text
@@ -151,16 +175,16 @@ def getData(regday, itemCategoryValue, itemValue, kindValue, productRankCode):
 
 
 def saveDB(data, regday, values, query):
-    datas = db.datas
+    all_datas = db.allDatas
 
-    if bool(datas.find_one({'date': regday})):
-        datas.update(
+    if bool(all_datas.find_one({'date': regday})):
+        all_datas.update(
             {'date': regday},
             {"$set": {query: values}})
         print("Complete Update")
-        dates.pop(0)  # 업데이트 완료 시 그 해당 날짜 리스트에서 제거
+
     else:
-        datas.insert_one(data)
+        all_datas.insert_one(data)
         print("Complete Insert")
 
 
@@ -170,23 +194,21 @@ def main():
     categoryCodes.pop('_id')
     itemCodes.pop('_id')
 
-    if len(list(db.datas.find())) == 0:  # 데이터가 DB에 없으면
+    if len(list(db.allDatas.find())) == 0:  # 데이터가 DB에 없으면
         getYearDate(0)
     else:
         getYearDate(1)
 
-    try:
-        for date in dates:
-            for itemCategoryValue in categoryCodes:
-                for itemValue in codes[itemCategoryValue].keys():
-                    for kindValue in codes[itemCategoryValue][itemValue].keys():
-                        if kindValue == '전체':  # 등급이 전체로 분류 된 것은 스킵
-                            continue
-                        for productRankCode in productRankCodes.keys():
-                            getData(date, itemCategoryValue, itemValue, kindValue, productRankCode)
-    except TimeoutError as e:  # Timeout 에러 발생 시 스킵하기 위함...테스트중
-        time.sleep(60)
-        pass
+    for date in dates:
+        for itemCategoryValue in categoryCodes:
+            for itemValue in codes[itemCategoryValue].keys():
+                for kindValue in codes[itemCategoryValue][itemValue].keys():
+                    if kindValue == '전체':  # 등급이 전체로 분류 된 것은 스킵
+                        continue
+                    for productRankCode in productRankCodes.keys():
+                        getData(date, itemCategoryValue, itemValue, kindValue, productRankCode)
+        # dates.pop(0)  # 업데이트 완료 시 그 해당 날짜 리스트에서 제거 (코드삭제)
 
 
-main()
+if __name__ == '__main__':
+    main()
