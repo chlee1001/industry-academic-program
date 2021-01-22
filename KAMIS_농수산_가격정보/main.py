@@ -1,10 +1,9 @@
 from requests import Session
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-import time
 from bs4 import BeautifulSoup
 from datetime import date, timedelta, datetime  # 최근 1년 날짜 구하기
-from pymongo import MongoClient, ReturnDocument
+from pymongo import MongoClient
 
 # mongodb 연결객체 생성
 client = MongoClient('주소')
