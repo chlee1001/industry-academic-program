@@ -39,8 +39,7 @@ menuIDs = ['menu100033', 'menu100034', 'menu100039', 'menu100155', 'menu100151']
 
 
 def getData(id, kind, menuID):
-    print(searchEndDate)
-    REQ_URL = ROOT_URL + kind + 'menuID=' + menuID + '&searchStartDate=' + '2021-01-22' + '&searchEndDate=' + '2021-01-22'
+    REQ_URL = ROOT_URL + kind + 'menuID=' + menuID + '&searchStartDate=' + '2021-01-20' + '&searchEndDate=' + searchEndDate  # searchStartDate에는 DB에 가장 최근 날짜
     now_date = ''
     response = requests.get(REQ_URL)
     if response.status_code == 200:
@@ -53,87 +52,115 @@ def getData(id, kind, menuID):
             # tr0~2까지 정보...
 
             table_list = []
-            price_list = []
-            division1 = []
-            division2 = []
-            division3 = []
             for idx, tr in enumerate(trs):
                 if idx == 0:
                     ths = tr.find_all('th')
                     for i in range(len(ths) - 1):  # (0~2)
                         table_list.append(ths[i + 1].text)
-                        division1.append(ths[i + 1].text)
-
 
                 elif idx == 1:
                     ths = tr.find_all('th')
                     for i in range(len(ths)):  # (0~2)
                         table_list.append(ths[i].text)
-                        division2.append(ths[i].text)
+
                 elif idx == 2:
                     ths = tr.find_all('th')
                     for i in range(len(ths)):  # (0~2)
                         table_list.append(ths[i].text)
-                        division3.append(ths[i].text)
+
                 else:
                     # print(tr)
+                    price_list = []
                     now_date = tr.find('th').text.replace(" ", "")
-                    # print(now_date)
-                    spans = tr.find_all('span')
+
+                    spans = tr.find_all('span', {'class': 'mr5'})
                     for span in spans:
+                        # print(span)
                         if len((span.text.split())) < 1:  # table에 가격 셀이 비어있는 경우 '-' 출력
                             price_list.append("-")
                         else:
                             price_list.append(span.text.split()[0])
-            # print(table_list)
-            # print(price_list)
 
-            # for i in range(len(price_list)):
-            #     test1[table_list[len(table_list) - len(price_list) + i]] = price_list[i]
-            #     # print(table_list[len(table_list) - len(price_list) + i])
-            #     # print(table_list[len(table_list) - len(price_list):])
-            # print(test1)
-            # for j in range(4):
-            #     print(table_list[len(table_list) - len(price_list) - 4 + j])
-
-            row_division1 = {}  # 경매가격
-            row_division2 = {}  # 지육가격
-            row_division3 = {}  # 부분육가격
-            row_division4 = {}  # 한우등심
-
-            # 개수는 colspan과 rowspan으로 일단 파악해보기.. 안되면 어쩔수 없고
-            for i in range(3):
-                row_division1[division3.pop(0)] = price_list.pop(0)
-            for i in range(2):
-                row_division2[division3.pop(0)] = price_list.pop(0)
-            row_division3[division3.pop(0)] = price_list.pop(0)
-            row_division4[division3.pop(0)] = price_list.pop(0)
-
-            test1 = dict()
-            test2 = dict()
-            test3 = dict()
-            test4 = dict()
-            test1[division2[0]] = row_division1
-            test2[division2[1]] = row_division2
-            test3[division2[2]] = row_division3
-            test4[division2[3]] = row_division4
+                    print(now_date)
+                    print(price_list)
+                    saveDB(id, now_date, price_list)
 
 
-            dic1 = {}  # 산지가격
-            dic2 = {}  # 도매가격
-            dic3 = {}  # 소비자가격
-            dic1[division1[0]] = test1
-            dic2[division1[1]] = test2, test3
-            dic3[division1[2]] = test4
+species_id = ['소', '돼지', '닭', '계란', '오리']
 
 
-            result={}
-            result[now_date] = dic1, dic2,dic3
-            print(result)
+
+test = {}
 
 
-def saveDB():
+def scheme(idx, date, price_list):
+    if idx == 0:
+        test = {'Species': species_id[idx]}
+        test[date] = {
+            "산지가격": {
+                "가축시장 경매가격(천원/마리)": {
+                    '암송아지(6~7개월)': price_list[0],
+                    '숫송아지(6~7개월)': price_list[1],
+                    '농가수취가격(600kg)': price_list[2]
+                }
+            },
+            "도매가격": {
+                "지육가격(한우)(원/kg)": {
+                    '평균': price_list[3],
+                    '1등급': price_list[4]
+                },
+                "부분육가격(한우, 등심)(원/kg)": {
+                    '1등급': price_list[5]
+                }
+            },
+            "소비자가격": {
+                '한우, 등심(원/kg)': {
+                    '1등급': price_list[6]
+                }
+            },
+        }
+        return test
+    elif idx == 1:
+        test = {'Species': species_id[idx]}
+        test[date] = {
+            "산지가격": {
+                "가축시장 경매가격(천원/마리)": {
+                    '암송아지(6~7개월)': price_list[0],
+                    '숫송아지(6~7개월)': price_list[1],
+                    '농가수취가격(600kg)': price_list[2]
+                }
+            },
+            "도매가격": {
+                "지육가격(한우)(원/kg)": {
+                    '평균': price_list[3],
+                    '1등급': price_list[4]
+                },
+                "부분육가격(한우, 등심)(원/kg)": {
+                    '1등급': price_list[5]
+                }
+            },
+            "소비자가격": {
+                '한우, 등심(원/kg)': {
+                    '1등급': price_list[6]
+                }
+            },
+        }
+        return test
+
+
+def saveDB(idx, date, price_list):
     print("Save DB")
+    if bool(db.allDatas.find_one({'Species': species_id[idx]})):
+        print(scheme(idx, date, price_list))
+
+        db.allDatas.update(
+            {'Species': species_id[idx]},
+            {"$set": scheme(idx, date, price_list)})
+        print("Complete Update")
+    else:
+
+        db.allDatas.insert_one(scheme(idx, date, price_list))
+        print("Complete Insert")
 
 
 def main():
