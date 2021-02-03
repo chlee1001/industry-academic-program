@@ -18,13 +18,12 @@ def getSearchDate(flag):
     if flag == 0:  # DB에 데이터가 없을 경우에는 기준일(20.01.01)부터
         searchStartDate = '2020-01-01'
         searchEndDate = str(endDate)
+
     else:
-        all_datas = db.allDatas.aggregate([
-            {'$sort': {'date': 1}},
-            {'$group': {'_id': None, 'first': {'$first': '$date'}, 'last': {'$last': '$date'}}}
-        ])
+        all_datas = db.allDatas.find({"Species": "오리"})
         for r in all_datas:
-            searchStartDate = r['last']
+            print(r)
+            # searchStartDate = r['last']
             searchEndDate = str(endDate)
 
 
@@ -41,51 +40,35 @@ tempDB = []  # DB에 저장하기 위한 필요정보를 임시저장하기 위�
 
 
 def getData(id, kind, menuID):
-    REQ_URL = ROOT_URL + kind + 'menuID=' + menuID + '&searchStartDate=' + '2021-01-20' + '&searchEndDate=' + searchEndDate  # searchStartDate에는 DB에 가장 최근 날짜
+    REQ_URL = ROOT_URL + kind + 'menuID=' + menuID + '&searchStartDate=' + '2021-01-10' + '&searchEndDate=' + searchEndDate  # searchStartDate에는 DB에 가장 최근 날짜
     now_date = ''
     response = requests.get(REQ_URL)
     if response.status_code == 200:
         text = response.text
         soup = BeautifulSoup(text, "html.parser")
-        table = soup.find('div', {'class': 'table-wrap'})
-        print(id)
-        if table is not None and id != 4:
-            tbody = table.find('tbody')
-            trs = tbody.find_all('tr')
 
-            if id == 0 or id == 1 or id == 3:  # 소(0), 돼지(1), 계란(3)
-                for idx, tr in enumerate(trs):
-                    price_list = []
-                    now_date = tr.find('th').text.replace(" ", "").strip()
-                    spans = tr.find_all('span', {'class': 'mr5'})
+        print(species_id[id])  # 현재 어떤 동물을 진행 중인지...
+        tbody = soup.find('tbody')  # html 소스에서 기존에는 table태그를 찾았지만, 오리는 table태그에 문제가 있어서 tbody 태그로 바꿈
+        trs = tbody.find_all('tr')  # tbody태그에 세부 tr태그들 묶음
 
-                    if not spans:  # 가격정보가 아닐 경우 패스
-                        continue
-                    for span in spans:
-                        # print(span)
-                        if len((span.text.split())) < 1:  # table에 가격 셀이 비어있는 경우 '-' 출력
-                            price_list.append("-")
-                        else:
-                            price_list.append(span.text.split()[0])
+        if id == 0 or id == 1 or id == 3:  # 소(0), 돼지(1), 계란(3)
+            for idx, tr in enumerate(trs):
+                price_list = []
+                now_date = tr.find('th').text.replace(" ", "").strip()
+                spans = tr.find_all('span', {'class': 'mr5'})
 
-                    # print(now_date, price_list)
-                    tempDB.insert(0, (id, now_date, price_list))  # DB에 저장하기 위한 필요정보를 튜플 형태로 tempDB에 임시 저장
-            else:  # 닭
-                for idx, tr in enumerate(trs):
-                    price_list = []
-                    now_date = tr.find('th').text.replace(" ", "")
-                    tds = tr.find_all('td', {'class': 'align_right'})
-                    for td in tds:
-                        if len((td.text.split())) < 1:  # table에 가격 셀이 비어있는 경우 '-' 출력
-                            price_list.append("-")
-                        else:
-                            price_list.append(td.text.split()[0])
-                    # print(now_date, price_list)
-                    tempDB.insert(0, (id, now_date, price_list))  # DB에 저장하기 위한 필요정보를 튜플 형태로 tempDB에 임시 저장
+                if not spans:  # 가격정보가 아닐 경우 패스
+                    continue
+                for span in spans:
+                    # print(span)
+                    if len((span.text.split())) < 1:  # table에 가격 셀이 비어있는 경우 '-' 출력
+                        price_list.append("-")
+                    else:
+                        price_list.append(span.text.split()[0])
+                # print(now_date, price_list)
+                tempDB.insert(0, (id, now_date, price_list))  # DB에 저장하기 위한 필요정보를 튜플 형태로 tempDB에 임시 저장
 
-        else:  # 오리는 사이트 코드 table태그에 문제가 있음...
-            tbody = soup.find('tbody')
-            trs = tbody.find_all('tr')
+        elif id == 2 or id == 4:  # 닭(2), 오리(4)
             for idx, tr in enumerate(trs):
                 price_list = []
                 now_date = tr.find('th').text.replace(" ", "").strip()
@@ -95,7 +78,6 @@ def getData(id, kind, menuID):
                         price_list.append("-")
                     else:
                         price_list.append(td.text.split()[0])
-                # print(now_date, price_list)
                 tempDB.insert(0, (id, now_date, price_list))  # DB에 저장하기 위한 필요정보를 튜플 형태로 tempDB에 임시 저장
 
 
